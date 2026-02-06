@@ -1,0 +1,276 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── USERS & AUTH ────────────────────────────────────────────
+
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  firstName    String   @map("first_name")
+  lastName     String   @map("last_name")
+  phone        String?
+  role         String   @default("salesperson") // salesperson | manager | admin
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  accounts     Account[]
+  orders       Order[]
+  appointments Appointment[]
+  queryLogs    QueryLog[]
+
+  @@map("users")
+}
+
+// ─── WINE CATALOG ────────────────────────────────────────────
+
+model GrapeVariety {
+  id              Int      @id @default(autoincrement())
+  name            String   @unique
+  languageOrigin  String   @default("en") @map("language_origin") // fr, it, es, de, en, pt
+  phoneticIpa     String?  @map("phonetic_ipa")      // IPA: /ʃɑʁdɔnɛ/
+  phoneticSimple  String?  @map("phonetic_simple")    // "shar-doh-NAY"
+  ssmlPronunciation String? @map("ssml_pronunciation") // SSML <phoneme> markup for TTS
+  alternateHearings String? @map("alternate_hearings") // JSON array: STT misinterpretations
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  wines Wine[]
+
+  @@map("grape_varieties")
+}
+
+model Region {
+  id              Int      @id @default(autoincrement())
+  name            String
+  country         String
+  parentRegionId  Int?     @map("parent_region_id")
+  languageOrigin  String   @default("en") @map("language_origin")
+  phoneticIpa     String?  @map("phonetic_ipa")
+  phoneticSimple  String?  @map("phonetic_simple")
+  ssmlPronunciation String? @map("ssml_pronunciation")
+  alternateHearings String? @map("alternate_hearings") // JSON array
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  parentRegion Region?  @relation("RegionHierarchy", fields: [parentRegionId], references: [id])
+  subRegions   Region[] @relation("RegionHierarchy")
+  wines        Wine[]
+  producers    Producer[]
+
+  @@unique([name, country])
+  @@map("regions")
+}
+
+model Producer {
+  id              Int      @id @default(autoincrement())
+  name            String
+  regionId        Int?     @map("region_id")
+  languageOrigin  String   @default("en") @map("language_origin")
+  phoneticIpa     String?  @map("phonetic_ipa")
+  phoneticSimple  String?  @map("phonetic_simple")
+  ssmlPronunciation String? @map("ssml_pronunciation")
+  alternateHearings String? @map("alternate_hearings") // JSON array
+  website         String?
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  region Region? @relation(fields: [regionId], references: [id])
+  wines  Wine[]
+
+  @@map("producers")
+}
+
+model Wine {
+  id              Int      @id @default(autoincrement())
+  name            String
+  vintage         Int?
+  grapeVarietyId  Int?     @map("grape_variety_id")
+  regionId        Int?     @map("region_id")
+  producerId      Int?     @map("producer_id")
+  appellation     String?  // e.g., "AOC Châteauneuf-du-Pape"
+  sku             String?  @unique
+  description     String?
+  priceWholesale  Float    @map("price_wholesale")  // price per bottle wholesale
+  priceRetail     Float?   @map("price_retail")
+  bottleSize      String   @default("750ml") @map("bottle_size")
+  caseSize        Int      @default(12) @map("case_size") // bottles per case
+  // Pronunciation fields for the wine name itself
+  languageOrigin  String   @default("en") @map("language_origin")
+  phoneticIpa     String?  @map("phonetic_ipa")
+  phoneticSimple  String?  @map("phonetic_simple")
+  ssmlPronunciation String? @map("ssml_pronunciation")
+  alternateHearings String? @map("alternate_hearings") // JSON array
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  grapeVariety GrapeVariety? @relation(fields: [grapeVarietyId], references: [id])
+  region       Region?       @relation(fields: [regionId], references: [id])
+  producer     Producer?     @relation(fields: [producerId], references: [id])
+  inventory    Inventory?
+  orderItems   OrderItem[]
+
+  @@map("wines")
+}
+
+model Inventory {
+  id                Int      @id @default(autoincrement())
+  wineId            Int      @unique @map("wine_id")
+  quantityAvailable Int      @default(0) @map("quantity_available")
+  quantityReserved  Int      @default(0) @map("quantity_reserved")
+  warehouseLocation String?  @map("warehouse_location")
+  reorderPoint      Int      @default(0) @map("reorder_point") // alert when stock falls below
+  lastUpdated       DateTime @default(now()) @map("last_updated")
+
+  wine Wine @relation(fields: [wineId], references: [id])
+
+  @@map("inventory")
+}
+
+// ─── ACCOUNTS & CUSTOMERS ────────────────────────────────────
+
+model Account {
+  id              Int      @id @default(autoincrement())
+  name            String
+  contactName     String?  @map("contact_name")
+  email           String?
+  phone           String?
+  address         String?
+  city            String?
+  state           String?
+  zip             String?
+  accountType     String   @default("restaurant") @map("account_type") // restaurant | retail | distributor | hotel | bar
+  salespersonId   Int?     @map("salesperson_id")
+  notes           String?
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  salesperson  User?         @relation(fields: [salespersonId], references: [id])
+  orders       Order[]
+  appointments Appointment[]
+
+  @@map("accounts")
+}
+
+// ─── ORDERS ──────────────────────────────────────────────────
+
+model Order {
+  id              Int      @id @default(autoincrement())
+  accountId       Int      @map("account_id")
+  salespersonId   Int      @map("salesperson_id")
+  status          String   @default("draft") // draft | pending_confirmation | confirmed | processing | shipped | delivered | cancelled
+  orderDate       DateTime @default(now()) @map("order_date")
+  confirmedDate   DateTime? @map("confirmed_date")
+  total           Float    @default(0)
+  notes           String?
+  voiceTranscript String?  @map("voice_transcript") // original voice command that created this order
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  account     Account     @relation(fields: [accountId], references: [id])
+  salesperson User        @relation(fields: [salespersonId], references: [id])
+  items       OrderItem[]
+  shipment    Shipment?
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id         Int   @id @default(autoincrement())
+  orderId    Int   @map("order_id")
+  wineId     Int   @map("wine_id")
+  quantity   Int   // number of bottles (or cases, depending on unitType)
+  unitType   String @default("bottle") @map("unit_type") // bottle | case
+  unitPrice  Float @map("unit_price")
+  lineTotal  Float @map("line_total")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  wine  Wine  @relation(fields: [wineId], references: [id])
+
+  @@map("order_items")
+}
+
+// ─── SHIPMENTS ───────────────────────────────────────────────
+
+model Shipment {
+  id                Int       @id @default(autoincrement())
+  orderId           Int       @unique @map("order_id")
+  trackingNumber    String?   @map("tracking_number")
+  carrier           String?
+  status            String    @default("pending") // pending | picked | shipped | in_transit | delivered
+  shippedDate       DateTime? @map("shipped_date")
+  estimatedDelivery DateTime? @map("estimated_delivery")
+  deliveredDate     DateTime? @map("delivered_date")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@map("shipments")
+}
+
+// ─── APPOINTMENTS ────────────────────────────────────────────
+
+model Appointment {
+  id            Int       @id @default(autoincrement())
+  salespersonId Int       @map("salesperson_id")
+  accountId     Int?      @map("account_id")
+  title         String
+  notes         String?
+  scheduledAt   DateTime  @map("scheduled_at")
+  reminderAt    DateTime? @map("reminder_at")
+  completed     Boolean   @default(false)
+  cancelled     Boolean   @default(false)
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  salesperson User     @relation(fields: [salespersonId], references: [id])
+  account     Account? @relation(fields: [accountId], references: [id])
+
+  @@map("appointments")
+}
+
+// ─── PRONUNCIATION DICTIONARY ────────────────────────────────
+// Standalone lookup table for voice STT/TTS support.
+// Covers wine names, regions, grapes, producers, appellations,
+// and any other wine terminology that may be spoken/heard.
+
+model PronunciationEntry {
+  id                Int      @id @default(autoincrement())
+  term              String   // the canonical term
+  category          String   // wine | region | grape | producer | appellation | general
+  language          String   @default("en") // origin language: fr, it, es, de, pt, en
+  phoneticIpa       String?  @map("phonetic_ipa")
+  phoneticSimple    String?  @map("phonetic_simple")    // human-readable: "boh-zhoh-LAY"
+  ssmlPronunciation String?  @map("ssml_pronunciation") // SSML markup for TTS engines
+  alternateHearings String?  @map("alternate_hearings")  // JSON: ["bojolay","beaujolais","bo jo lay"]
+  notes             String?
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  @@unique([term, category])
+  @@map("pronunciation_dictionary")
+}
+
+// ─── QUERY / VOICE LOG ───────────────────────────────────────
+
+model QueryLog {
+  id           Int      @id @default(autoincrement())
+  userId       Int      @map("user_id")
+  queryText    String   @map("query_text")
+  queryType    String   @default("text") @map("query_type") // text | voice
+  intentParsed String?  @map("intent_parsed") // what the system understood
+  responseText String?  @map("response_text")
+  successful   Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("query_logs")
+}
