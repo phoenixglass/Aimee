@@ -8,5 +8,6 @@ router.use('/accounts', require('./accounts'));
 router.use('/orders', require('./orders'));
 router.use('/appointments', require('./appointments'));
 router.use('/pronunciation', require('./pronunciation'));
+router.use('/voice', require('./voice'));
 
 module.exports = router;

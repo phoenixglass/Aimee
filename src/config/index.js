@@ -7,9 +7,19 @@ const config = {
     secret: process.env.JWT_SECRET || 'change-this',
     expiry: process.env.JWT_EXPIRY || '24h',
   },
-  // Future integrations
+  // Voice - ElevenLabs TTS
+  elevenLabs: {
+    apiKey: process.env.ELEVENLABS_API_KEY || '',
+    voiceId: process.env.ELEVENLABS_VOICE_ID || '21m00Tcm4TlvDq8ikWAM', // Rachel (default)
+    modelId: process.env.ELEVENLABS_MODEL_ID || 'eleven_multilingual_v2',
+  },
+  // Voice - STT
+  sttProvider: process.env.STT_PROVIDER || 'deepgram', // "deepgram" or "whisper"
   deepgram: {
     apiKey: process.env.DEEPGRAM_API_KEY || '',
+  },
+  openai: {
+    apiKey: process.env.OPENAI_API_KEY || '',
   },
   twilio: {
     accountSid: process.env.TWILIO_ACCOUNT_SID || '',
