@@ -1,0 +1,11 @@
+node_modules
+.env
+*.db
+*.db-journal
+prisma/*.db
+prisma/*.db-journal
+tests
+.git
+coverage
+*.log
+server and package
