@@ -2,6 +2,7 @@ const { PrismaClient } = require('@prisma/client');
 const sttService = require('./sttService');
 const ttsService = require('./ttsService');
 const pronunciationService = require('./pronunciationService');
+const notificationService = require('./notificationService');
 
 const prisma = new PrismaClient();
 
@@ -170,6 +171,20 @@ function matchTerm(text, canonicalName, alternateHearingsJson) {
 function parseIntent(transcript, resolvedTerms) {
   const lower = transcript.toLowerCase();
 
+  // Send text / SMS
+  if (matchesAny(lower, ['text ', 'send a text', 'send a message', 'sms '])) {
+    const accountMention = extractAccountMention(lower);
+    const message = extractMessageContent(lower);
+    return { type: 'send_text', account: accountMention, message, raw: transcript };
+  }
+
+  // Send email
+  if (matchesAny(lower, ['email ', 'send an email', 'send email'])) {
+    const accountMention = extractAccountMention(lower);
+    const message = extractMessageContent(lower);
+    return { type: 'send_email', account: accountMention, message, raw: transcript };
+  }
+
   // Order-related intents
   if (matchesAny(lower, ['order', 'put in an order', 'place an order', 'i need to order', 'send'])) {
     const quantity = extractQuantity(lower);
@@ -286,6 +301,22 @@ function extractAccountMention(text) {
   return null;
 }
 
+function extractMessageContent(text) {
+  // "text Thompson Restaurant that their order shipped"
+  // "email Le Petit Bistro saying the Barolo is back in stock"
+  const patterns = [
+    /(?:that|saying|to say|to tell them|message)\s+(.+)/i,
+    /(?:text|email|sms)\s+\S+.*?(?:that|saying)\s+(.+)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match) return match[1].trim();
+  }
+
+  return null;
+}
+
 // ─── INTENT EXECUTION ────────────────────────────────────────
 
 async function executeIntent(intent, user, resolvedTerms) {
@@ -322,6 +353,12 @@ async function executeIntent(intent, user, resolvedTerms) {
 
     case 'pronunciation_help':
       return handlePronunciationHelp(intent, resolvedTerms);
+
+    case 'send_text':
+      return handleSendText(intent, user);
+
+    case 'send_email':
+      return handleSendEmail(intent, user);
 
     default:
       return `I'm not sure what you'd like to do. You can ask me to place an order, check inventory, look up account info, check your schedule, or get info about a wine. What would you like?`;
@@ -685,6 +722,58 @@ async function handlePronunciationHelp(intent, resolvedTerms) {
   }
 
   return `${term.canonical}. I don't have a specific pronunciation guide for that one.`;
+}
+
+// ─── MESSAGING HANDLERS ──────────────────────────────────────
+
+async function handleSendText(intent, user) {
+  if (!intent.account) {
+    return `Who would you like me to text?`;
+  }
+  if (!intent.message) {
+    return `What would you like the message to say to ${intent.account}?`;
+  }
+
+  try {
+    const result = await notificationService.sendQuickMessage({
+      channel: 'sms',
+      accountName: intent.account,
+      message: intent.message,
+      userId: user.id,
+    });
+
+    if (result.success) {
+      return `Done, I've sent a text to ${intent.account}: "${intent.message}"`;
+    }
+    return `I couldn't send that text. ${result.error}`;
+  } catch (err) {
+    return `I wasn't able to send the text. ${err.message}`;
+  }
+}
+
+async function handleSendEmail(intent, user) {
+  if (!intent.account) {
+    return `Who would you like me to email?`;
+  }
+  if (!intent.message) {
+    return `What would you like the email to say to ${intent.account}?`;
+  }
+
+  try {
+    const result = await notificationService.sendQuickMessage({
+      channel: 'email',
+      accountName: intent.account,
+      message: intent.message,
+      userId: user.id,
+    });
+
+    if (result.success) {
+      return `Done, I've emailed ${intent.account}: "${intent.message}"`;
+    }
+    return `I couldn't send that email. ${result.error}`;
+  } catch (err) {
+    return `I wasn't able to send the email. ${err.message}`;
+  }
 }
 
 module.exports = { processVoiceInput, processTextInput };

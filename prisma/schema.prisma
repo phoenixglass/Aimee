@@ -25,6 +25,7 @@ model User {
   orders       Order[]
   appointments Appointment[]
   queryLogs    QueryLog[]
+  messageLogs  MessageLog[]
 
   @@map("users")
 }
@@ -256,6 +257,30 @@ model PronunciationEntry {
 
   @@unique([term, category])
   @@map("pronunciation_dictionary")
+}
+
+// ─── MESSAGE LOG ─────────────────────────────────────────────
+// Tracks all outbound emails and SMS for audit and retry.
+
+model MessageLog {
+  id          Int      @id @default(autoincrement())
+  userId      Int      @map("user_id")
+  channel     String   // email | sms
+  recipientTo String   @map("recipient_to") // email address or phone number
+  subject     String?  // email subject (null for SMS)
+  body        String   // message body (text or HTML)
+  templateKey String?  @map("template_key") // which template was used
+  relatedType String?  @map("related_type") // order | appointment | shipment | general
+  relatedId   Int?     @map("related_id")   // ID of related entity
+  status      String   @default("pending") // pending | sent | failed | delivered | bounced
+  externalId  String?  @map("external_id")  // SendGrid message ID or Twilio SID
+  errorDetail String?  @map("error_detail")
+  sentAt      DateTime? @map("sent_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("message_logs")
 }
 
 // ─── QUERY / VOICE LOG ───────────────────────────────────────
