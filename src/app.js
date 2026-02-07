@@ -1,3 +1,4 @@
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -8,13 +9,16 @@ const routes = require('./routes');
 const app = express();
 
 // Security & parsing
-app.use(helmet());
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
 app.use(express.json());
 app.use(requestLogger);
 
-// Health check
-app.get('/', (req, res) => {
+// Serve frontend
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Health check API
+app.get('/health', (req, res) => {
   res.json({
     name: 'Aimee - Wine Sales Voice Assistant API',
     version: '1.0.0',
